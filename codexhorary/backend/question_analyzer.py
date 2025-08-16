@@ -1,5 +1,8 @@
 from typing import Dict, Any, List
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TraditionalHoraryQuestionAnalyzer:
@@ -165,7 +168,12 @@ class TraditionalHoraryQuestionAnalyzer:
         significators = self._determine_significators(houses, question_type, possession_analysis, third_person_analysis)
 
         # DEBUG: Emit classification traceability information
-        print(f"DEBUG: category={question_type}, matched={matched_pattern}, houses={houses}")
+        logger.debug(
+            "category=%s, matched=%s, houses=%s",
+            question_type,
+            matched_pattern,
+            houses,
+        )
 
         return {
             "question_type": question_type,
