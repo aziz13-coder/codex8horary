@@ -15,9 +15,10 @@ def test_primary_success_filters_non_applying_paths():
         ]
     }
 
-    baseline, bonus = _phase_b_primary_success(chart)
+    baseline, bonus, indirect = _phase_b_primary_success(chart)
     assert baseline is False
     assert bonus == WEIGHT_TRANSLATION
+    assert indirect is True
     assert chart['paths'] == ['translation']
     assert chart['rejected_paths'] == ['direct', 'collection']
     assert 'path:translation' in chart['proof']
@@ -38,7 +39,7 @@ def test_evaluate_chart_rejects_only_perfected_paths():
     assert 'no-path' in result['proof']
 
 
-def test_translation_path_only_modifies_confidence():
+def test_translation_path_yields_indirect_success():
     chart = {
         'aspect_timeline': [
             {'type': 'translation', 'status': 'applying'}
@@ -46,6 +47,6 @@ def test_translation_path_only_modifies_confidence():
     }
 
     result = evaluate_chart(chart)
-    assert result['verdict'] == 'NO'
-    assert result['confidence'] == pytest.approx(0.2 + WEIGHT_TRANSLATION)
+    assert result['verdict'] == 'YES'
+    assert result['confidence'] == pytest.approx(0.5 + WEIGHT_TRANSLATION)
     assert 'path:translation' in result['proof']
