@@ -50,20 +50,6 @@ from horary_engine.engine import HoraryEngine, serialize_planet_with_solar
 from horary_engine.services.geolocation import LocationError
 
 
-def safe_log(logger, level, message):
-    """Safe logging function that handles Unicode encoding issues on Windows"""
-    try:
-        getattr(logger, level)(message)
-    except (UnicodeEncodeError, UnicodeError, Exception) as e:
-        # Fallback for Windows console encoding issues (CP1252)
-        try:
-            safe_message = message.encode('ascii', 'replace').decode('ascii')
-            getattr(logger, level)(safe_message)
-        except Exception:
-            # Ultimate fallback
-            getattr(logger, level)("<message with encoding issues>")
-
-
 
 # Configure logging
 
@@ -493,7 +479,7 @@ def get_timezone():
 
             # Log timezone detection with safe encoding
             location_safe = full_location.encode('ascii', 'replace').decode('ascii') if full_location else 'Unknown'
-            safe_log(logger, 'info', f"Enhanced timezone detection successful: {timezone_str} for {location_safe}")
+            logger.info(f"Enhanced timezone detection successful: {timezone_str} for {location_safe}")
 
             return jsonify(result)
 
@@ -629,7 +615,7 @@ def get_current_time():
 
             # Log current time retrieval with safe encoding
             location_safe = full_location.encode('ascii', 'replace').decode('ascii') if full_location else 'Unknown'
-            safe_log(logger, 'info', f"Enhanced current time retrieval successful for {location_safe}: {dt_local}")
+            logger.info(f"Enhanced current time retrieval successful for {location_safe}: {dt_local}")
 
             return jsonify(result)
 
