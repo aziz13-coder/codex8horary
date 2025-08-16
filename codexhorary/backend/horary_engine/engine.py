@@ -1412,7 +1412,34 @@ class EnhancedTraditionalHoraryJudgmentEngine:
                 },
                 "solar_factors": solar_factors,
             }
-        
+
+        # Gather potential blockers before considering special overrides
+        blocker_eval = self._evaluate_blockers(
+            chart,
+            querent_planet,
+            quesited_planet,
+            moon_next_aspect_result,
+            solar_factors,
+            ignore_void_moon,
+            ignore_combustion,
+        )
+        if blocker_eval["fatal"]:
+            top_blocker = blocker_eval["blockers"][0]
+            return {
+                "result": "NO",
+                "confidence": min(confidence, top_blocker.get("confidence", 85)),
+                "reasoning": reasoning + [top_blocker["reason"]],
+                "timing": None,
+                "traditional_factors": {
+                    "perfection_type": "blocked",
+                    "blockers": blocker_eval["blockers"],
+                    "reception": "none",
+                    "querent_strength": chart.planets[querent_planet].dignity_score,
+                    "quesited_strength": chart.planets[quesited_planet].dignity_score,
+                },
+                "solar_factors": solar_factors,
+            }
+
         # 3.5. Traditional Same-Ruler Logic (FIXED: Unity defaults to YES unless explicit prohibition)
         if significators.get("same_ruler_analysis"):
             same_ruler_info = significators["same_ruler_analysis"]
@@ -3159,8 +3186,56 @@ class EnhancedTraditionalHoraryJudgmentEngine:
                 "reception": "both_receive_collector"
             }
         
-        return {"found": False}
-    
+            return {"found": False}
+
+    def _evaluate_blockers(self, chart: HoraryChart, querent: Planet, quesited: Planet,
+                           moon_next_aspect: Dict[str, Any], solar_factors: Dict[str, Any],
+                           ignore_void_moon: bool = False, ignore_combustion: bool = False) -> Dict[str, Any]:
+        """Collect potential blockers and rank them by severity."""
+        blockers: List[Dict[str, Any]] = []
+        severity_rank = {"fatal": 0, "severe": 1, "warning": 2}
+
+        # Traditional prohibition takes top priority
+        prohibition = self._check_traditional_prohibition(chart, querent, quesited)
+        if prohibition.get("found"):
+            blockers.append({
+                "type": "prohibition",
+                "severity": "fatal",
+                "reason": prohibition["reason"],
+                "confidence": prohibition.get("confidence", 80),
+            })
+
+        # Moon's next aspect denial
+        if moon_next_aspect.get("result") == "NO":
+            blockers.append({
+                "type": "moon_next_aspect",
+                "severity": "fatal",
+                "reason": f"Moon's next aspect denies perfection: {moon_next_aspect['reason']}",
+                "confidence": moon_next_aspect.get("confidence", 75),
+            })
+
+        if not ignore_void_moon:
+            void_check = self._is_moon_void_of_course_enhanced(chart)
+            if void_check["void"] and not void_check.get("exception"):
+                blockers.append({
+                    "type": "void_of_course",
+                    "severity": "warning",
+                    "reason": f"Moon void of course: {void_check['reason']}",
+                })
+
+        # Significant solar impediments to significators
+        if not ignore_combustion:
+            for analysis in solar_factors.get("detailed_analyses", {}).values():
+                if analysis.get("planet") in [querent.value, quesited.value] and analysis.get("condition") in ["Combustion", "Under the Beams"]:
+                    blockers.append({
+                        "type": "solar_impediment",
+                        "severity": "severe",
+                        "reason": f"{analysis['planet']} {analysis['condition'].lower()}",
+                    })
+
+        blockers.sort(key=lambda b: severity_rank.get(b.get("severity", "warning"), 99))
+        return {"blockers": blockers, "fatal": any(b["severity"] == "fatal" for b in blockers)}
+
     def _check_traditional_prohibition(self, chart: HoraryChart, querent: Planet, quesited: Planet) -> Dict[str, Any]:
         """Traditional prohibition following Lilly's definition"""
         
