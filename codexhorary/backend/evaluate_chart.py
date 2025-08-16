@@ -18,7 +18,7 @@ def _phase_a_setup(chart: Dict[str, Any]) -> None:
     chart.setdefault('aspect_timeline', [])
 
 
-def _phase_b_primary_success(chart: Dict[str, Any]) -> Tuple[bool, float]:
+def _phase_b_primary_success(chart: Dict[str, Any]) -> Tuple[bool, float, bool]:
     """Validate primary perfection paths and compute path weights.
 
     The chart may provide an ``aspect_timeline`` describing potential
@@ -28,15 +28,18 @@ def _phase_b_primary_success(chart: Dict[str, Any]) -> Tuple[bool, float]:
     ``separating`` or already ``perfected``.
 
     Only paths with applying aspects contribute to the judgment. ``direct``
-    paths establish the baseline success, while ``translation`` and
-    ``collection`` paths merely add to the confidence score. Separating or
-    perfected paths are recorded in ``rejected_paths`` for later debugging.
+    paths establish the baseline success. ``translation`` and ``collection``
+    paths add to the confidence score and can establish an indirect baseline
+    if no direct path exists. Separating or perfected paths are recorded in
+    ``rejected_paths`` for later debugging.
 
     Returns
     -------
-    Tuple[bool, float]
+    Tuple[bool, float, bool]
         ``baseline`` indicates if a direct path was found. ``bonus`` is the
-        accumulated weight from any applying paths.
+        accumulated weight from any applying paths. ``indirect_baseline`` is
+        ``True`` when at least one applying translation or collection path
+        exists without a direct path.
     """
 
     timeline = chart.get('aspect_timeline', [])
@@ -44,6 +47,7 @@ def _phase_b_primary_success(chart: Dict[str, Any]) -> Tuple[bool, float]:
     rejected: list[str] = []
     baseline = False
     bonus = 0.0
+    indirect_candidate = False
 
     for event in timeline:
         path_type = event.get('path') or event.get('type')
@@ -56,8 +60,10 @@ def _phase_b_primary_success(chart: Dict[str, Any]) -> Tuple[bool, float]:
                     bonus += WEIGHT_DIRECT
                 elif path_type == 'translation':
                     bonus += WEIGHT_TRANSLATION
+                    indirect_candidate = True
                 elif path_type == 'collection':
                     bonus += WEIGHT_COLLECTION
+                    indirect_candidate = True
             elif status in {'separating', 'perfected'}:
                 rejected.append(path_type)
 
@@ -68,7 +74,8 @@ def _phase_b_primary_success(chart: Dict[str, Any]) -> Tuple[bool, float]:
     for path in valid:
         chart.setdefault('proof', []).append(f"path:{path}")
 
-    return baseline, bonus
+    indirect_baseline = not baseline and indirect_candidate
+    return baseline, bonus, indirect_baseline
 
 
 def _phase_c_early_blockers(chart: Dict[str, Any], *, fatal_combustion: bool) -> bool:
@@ -120,12 +127,12 @@ def evaluate_chart(chart: Dict[str, Any], *, fatal_combustion: bool = True) -> D
         If ``True`` combustion acts as a fatal blocker.
     """
     _phase_a_setup(chart)
-    baseline, bonus = _phase_b_primary_success(chart)
+    baseline, bonus, indirect_baseline = _phase_b_primary_success(chart)
     blocked = _phase_c_early_blockers(chart, fatal_combustion=fatal_combustion)
-    if not baseline and not blocked:
+    if not baseline and not indirect_baseline and not blocked:
         _phase_d_no_path(chart)
-    baseline = baseline and not blocked
-    confidence = 0.5 if baseline else 0.2
+    baseline_yes = (baseline or indirect_baseline) and not blocked
+    confidence = 0.5 if baseline_yes else 0.2
     confidence += bonus
     confidence = _phase_e_modulators(chart, confidence)
-    return _phase_f_output(baseline, chart, confidence)
+    return _phase_f_output(baseline_yes, chart, confidence)
