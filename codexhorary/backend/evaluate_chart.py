@@ -12,10 +12,38 @@ def _phase_a_setup(chart: Dict[str, Any]) -> None:
 
 
 def _phase_b_primary_success(chart: Dict[str, Any]) -> bool:
-    """Search for direct, translation, or collection paths in time order."""
-    paths = chart.get('paths', [])
+    """Validate primary perfection paths are applying.
+
+    The chart may provide an ``aspect_timeline`` describing potential
+    connections between significators.  Each item in the timeline should
+    contain the path type (``direct``, ``translation`` or ``collection``)
+    and a ``status`` field indicating whether the aspect is ``applying``,
+    ``separating`` or already ``perfected``.
+
+    Only paths with applying aspects count toward a successful judgment.
+    Separating or perfected paths are recorded in ``rejected_paths`` for
+    later debugging.
+    """
+
+    timeline = chart.get('aspect_timeline', [])
+    valid: list[str] = []
+    rejected: list[str] = []
+
+    for event in timeline:
+        path_type = event.get('path') or event.get('type')
+        status = event.get('status')
+        if path_type in ('direct', 'translation', 'collection'):
+            if status == 'applying':
+                valid.append(path_type)
+            elif status in {'separating', 'perfected'}:
+                rejected.append(path_type)
+
+    chart['paths'] = valid
+    if rejected:
+        chart['rejected_paths'] = rejected
+
     for path in ('direct', 'translation', 'collection'):
-        if path in paths:
+        if path in valid:
             chart.setdefault('proof', []).append(f"path:{path}")
             return True
     return False
